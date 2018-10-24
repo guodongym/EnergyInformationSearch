@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:c="http://www.springframework.org/schema/c" xmlns:cache="http://www.springframework.org/schema/cache"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc" xmlns:jee="http://www.springframework.org/schema/jee"
+	xmlns:lang="http://www.springframework.org/schema/lang" xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:p="http://www.springframework.org/schema/p" xmlns:task="http://www.springframework.org/schema/task"
+	xmlns:tx="http://www.springframework.org/schema/tx" xmlns:util="http://www.springframework.org/schema/util"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee.xsd
+		http://www.springframework.org/schema/lang http://www.springframework.org/schema/lang/spring-lang.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
+		http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+	
+	<!--redis  -->
+	<bean name ="node" class="com.cnpc.geo.energyinformationsearch.base.entity.Node">
+		<property name="ip"  value="${redis.ip}"></property>
+        <property name="port"  value="${redis.port}"></property>
+	</bean>
+	
+	<bean id="redisUtil" class="com.cnpc.geo.energyinformationsearch.base.util.RedisUtil">
+		<constructor-arg>
+			<list>
+				<ref bean="node"/>
+			</list>
+		</constructor-arg> 
+	</bean>
+	
+	<!-- 加载配置文件  -->
+	<bean id = "properties" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+        	<list>
+        		<value>/WEB-INF/elasticSearch.properties</value>
+        		<value>/WEB-INF/hbase.properties</value>
+        		<value>/WEB-INF/thrift/thrift.properties</value>
+        		<value>classpath:redis.properties</value>
+        	</list>
+        </property>
+    </bean>
+    
+    <!-- hbase config -->
+    <bean id = "hbaseClientConfig" class="com.cnpc.geo.energyinformationsearch.hbase.client.HbaseClientConfig">
+    	<property name="hbaseMaster">
+    		<value>${hbase.master}</value>
+    	</property>
+    	<property name="hbaseZookeeperQuorum">
+    		<value>${hbase.zookeeper.quorum}</value>
+    	</property>
+    	<property name="zookeeperClientPort">
+    		<value>${hbase.zookeeper.property.clientPort}</value>
+    	</property>
+    	<property name="zookeeperZnodeParent">
+    		<value>${zookeeper.znode.parent}</value>
+    	</property>
+    </bean>
+    
+    <!-- hbase service -->
+    <bean id = "hbaseClientService" class="com.cnpc.geo.energyinformationsearch.hbase.client.HbaseClientService">
+    	<constructor-arg>
+    		<ref bean="hbaseClientConfig"/>
+    	</constructor-arg>
+    </bean>
+    
+    <!-- elasticsearch config -->
+    <bean id = "elasticSearchClientConfig" class="com.cnpc.geo.energyinformationsearch.es.client.ElasticSearchClientConfig">
+    	<property name="nodeList">
+    		<value>${nodeList}</value>
+    	</property>
+    	<property name="clusterName">
+    		<value>${clusterName}</value>
+    	</property>
+    	<property name="sniff">
+    		<value>${sniff}</value>
+    	</property>
+    	<property name="pingTimeOut">
+    		<value>${pingTimeOut}</value>
+    	</property> 
+    </bean>
+    
+    <!-- elasticsearch service -->
+    <bean id = "elasticSearchClientService" class="com.cnpc.geo.energyinformationsearch.es.client.ElasticSearchClientService">
+    	<constructor-arg>
+    		<ref bean="elasticSearchClientConfig"/>
+    	</constructor-arg>
+    </bean>
+    
+    <!-- 注册异步线程池 -->
+	<bean id="taskExecutor" class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+		<!-- 核心线程数 -->
+		<property name="corePoolSize" value="10" />
+		<!-- 最大线程数 -->
+		<property name="maxPoolSize" value="50" />
+		<!-- 队列最大长度 >=mainExecutor.maxSize -->
+		<property name="queueCapacity" value="1000" />
+		<!-- 线程池维护线程所允许的空闲时间 -->
+		<property name="keepAliveSeconds" value="300" />
+		<!-- 线程池对拒绝任务(无线程可用)的处理策略 -->
+		<property name="rejectedExecutionHandler">
+			<bean class="java.util.concurrent.ThreadPoolExecutor$CallerRunsPolicy" />
+		</property>
+	</bean>
+	
+	<bean id="searchInfo"  class="com.cnpc.geo.energyinformationsearch.thrift.infaceimpl.SearchInfoServiceImpl">
+	 	 <property name="hbaseClientService"> 
+		            <ref bean="hbaseClientService"/> 
+		  </property>
+		  
+		  <property name="elasticSearchClientService"> 
+		            <ref bean="elasticSearchClientService"/> 
+		  </property>
+		  
+		  <property name="producer">
+		  		<ref bean="producer"/>
+		  </property>
+ 	</bean>
+ 	<!-- thrift ssl config -->
+	<bean id="thriftSSLConfig" class="com.cnpc.geo.energyinformationsearch.thrift.server.ThriftSSLConfig">
+		<property name="path">
+			<value>${path}</value>
+		</property>
+	</bean>
+  <!-- <bean class = "com.cnpc.geo.energyinformationsearch.thrift.server.ThriftServiceServer"/> -->
+ 
+	<bean id="thriftServiceServer" class="com.cnpc.geo.energyinformationsearch.thrift.server.ThriftServiceServer">
+		  <property name="searchInfo"> 
+	     	<ref bean="searchInfo"/> 
+	  	  </property>
+	  	  <property name="thriftSSLConfig">
+	  	  	<ref bean="thriftSSLConfig"/>
+	  	  </property>
+	</bean>
+ 
+	<bean id="serverInitManager" class="com.cnpc.geo.energyinformationsearch.base.init.ServerInitManager">
+		<property name="serverList">
+		    <list>
+		    	<ref bean="thriftServiceServer"/>
+	        </list>
+		</property>
+		<property name="taskExecutor">
+			<ref bean="taskExecutor"/>
+		</property>
+	</bean>
+	
+	<!-- 加载kafka配置文件  -->
+	<bean id = "producerProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+        <property name="locations">
+	        <value>/WEB-INF/producer.properties</value>
+        </property>
+    </bean>
+    
+    <bean id = "consumerProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+        <property name="locations">
+	        <value>/WEB-INF/consumer.properties</value>
+        </property>
+    </bean>
+    
+
+    <!-- kafka producer配置 -->
+    <bean id = "producerConfig" class = "kafka.producer.ProducerConfig">
+    	<constructor-arg>
+    		<ref bean="producerProperties"/>
+    	</constructor-arg>
+    </bean>
+    
+    <bean id = "producer" class = "kafka.javaapi.producer.Producer">
+        <constructor-arg>
+    		<ref bean="producerConfig"/>
+    	</constructor-arg>
+    </bean>
+    
+    <!-- kafka consumer配置 -->
+    <bean id = "consumerConfig" class = "kafka.consumer.ConsumerConfig">
+    	<constructor-arg>
+    		<ref bean="consumerProperties"/>
+    	</constructor-arg>
+    </bean>
+    
+    
+    <bean id= "kafkaConsumer" class= "com.cnpc.geo.energyinformationsearch.kafka.KafkaConsumer">
+    	<constructor-arg>
+    		<ref bean="consumerConfig"/>
+    	</constructor-arg>
+    </bean>
+    
+    <bean id="springUtils" class="com.cnpc.geo.energyinformationsearch.base.util.SpringUtils"></bean>
+    
+    
+    <!-- 文件上传反馈任务 -->
+   <!--  <bean id="feedbackJob" class="com.cnpc.geo.energyinformationsearch.job.FeedbackJob"></bean> -->
+	
+</beans>
